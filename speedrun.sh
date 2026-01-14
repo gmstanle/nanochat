@@ -84,9 +84,10 @@ NPROC_PER_NODE=1
 
 # pretrain the d20 model
 # DEV: Added --num-iterations=50 for quick testing (overrides --target-param-data-ratio)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --num-iterations=50 --eval-every=25 --core-metric-every=-1 --sample-every=50 --run=$WANDB_RUN
+# DEV: Reduced --device-batch-size from 32 to 8 to fit in single H100 memory
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --device-batch-size=8 --num-iterations=50 --eval-every=25 --core-metric-every=-1 --sample-every=50 --run=$WANDB_RUN
 # evaluate the model on a larger chunk of train/val data and draw some samples
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss -- --device-batch-size=8
 # evaluate the model on CORE tasks
 torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval
 
@@ -99,7 +100,8 @@ curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-publ
 
 # run midtraining and eval the model
 # DEV: Added --num-iterations=50 for quick testing
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --num-iterations=50 --eval-every=25 --run=$WANDB_RUN
+# DEV: Reduced --device-batch-size to 8 for single H100
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --device-batch-size=8 --num-iterations=50 --eval-every=25 --run=$WANDB_RUN
 torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i mid
 
 # -----------------------------------------------------------------------------
