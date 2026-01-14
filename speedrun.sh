@@ -85,11 +85,14 @@ NPROC_PER_NODE=1
 # pretrain the d20 model
 # DEV: Added --num-iterations=50 for quick testing (overrides --target-param-data-ratio)
 # DEV: Reduced --device-batch-size from 32 to 8 to fit in single H100 memory
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --device-batch-size=8 --num-iterations=50 --eval-every=25 --core-metric-every=-1 --sample-every=50 --run=$WANDB_RUN
+# DEV: Reduced --eval-tokens to speed up validation evals
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --device-batch-size=8 --num-iterations=50 --eval-every=25 --eval-tokens=524288 --core-metric-every=-1 --sample-every=50 --run=$WANDB_RUN
 # evaluate the model on a larger chunk of train/val data and draw some samples
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss -- --device-batch-size=8
+# DEV: Reduced --split-tokens for faster eval
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss -- --device-batch-size=8 --split-tokens=524288
 # evaluate the model on CORE tasks
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval
+# DEV: Limit to 50 examples per task for faster eval
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval -- --max-per-task=50
 
 # -----------------------------------------------------------------------------
 # Midtraining (teach the model conversation special tokens, tool use, multiple choice)
@@ -101,16 +104,20 @@ curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-publ
 # run midtraining and eval the model
 # DEV: Added --num-iterations=50 for quick testing
 # DEV: Reduced --device-batch-size to 8 for single H100
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --device-batch-size=8 --num-iterations=50 --eval-every=25 --run=$WANDB_RUN
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i mid
+# DEV: Reduced --eval-tokens for faster validation
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --device-batch-size=8 --num-iterations=50 --eval-every=25 --eval-tokens=524288 --run=$WANDB_RUN
+# DEV: Limit to 50 problems per task for faster eval
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i mid --max-problems=50
 
 # -----------------------------------------------------------------------------
 # Supervised Finetuning (domain adaptation to each sequence all by itself per row)
 
 # train sft and re-eval right away (should see a small bump)
 # DEV: Added --num-iterations=50 for quick testing
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- --num-iterations=50 --eval-every=25 --run=$WANDB_RUN
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft
+# DEV: Reduced --eval-steps for faster validation
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- --num-iterations=50 --eval-every=25 --eval-steps=20 --run=$WANDB_RUN
+# DEV: Limit to 50 problems per task for faster eval
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i sft --max-problems=50
 
 # chat with the model over CLI! Leave out the -p to chat interactively
 # python -m scripts.chat_cli -p "Why is the sky blue?"
