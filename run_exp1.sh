@@ -138,7 +138,7 @@ NPROC_PER_NODE=8
 # pretrain the d20 model
 echo "Pretraining d20 model (561M params, Chinchilla 20x)..."
 PRETRAIN_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --target-param-data-ratio=20 --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --device-batch-size=16 --target-param-data-ratio=20 --run=$WANDB_RUN
 PRETRAIN_END=$(date +%s)
 PRETRAIN_TIME=$((PRETRAIN_END - PRETRAIN_START))
 echo "Completed pretraining in ${PRETRAIN_TIME}s"
@@ -146,7 +146,7 @@ echo "Completed pretraining in ${PRETRAIN_TIME}s"
 # evaluate the model on a larger chunk of train/val data and draw some samples
 echo "Evaluating base loss on train/val splits..."
 BASELOSS_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss -- --device-batch-size=16
 BASELOSS_END=$(date +%s)
 BASELOSS_TIME=$((BASELOSS_END - BASELOSS_START))
 echo "Completed base_loss evaluation in ${BASELOSS_TIME}s"
@@ -181,7 +181,7 @@ curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-publ
 # run midtraining and eval the model
 echo "Running midtraining (conversation format, tool use, multiple choice)..."
 MIDTRAIN_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --run=$WANDB_RUN
+torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --device-batch-size=16 --run=$WANDB_RUN
 MIDTRAIN_END=$(date +%s)
 MIDTRAIN_TIME=$((MIDTRAIN_END - MIDTRAIN_START))
 echo "Completed midtraining in ${MIDTRAIN_TIME}s"
@@ -228,6 +228,7 @@ for m in "${MISTAKES[@]}"; do
     echo "Training SFT model (mistakes=${m})..."
     SFT_TRAIN_START=$(date +%s)
     torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- \
+        --device-batch-size=16 \
         --run="${WANDB_RUN}_${TAG}" \
         --model-tag="${TAG}" \
         --core-metric-every=999999 \
