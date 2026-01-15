@@ -23,7 +23,7 @@ export NANOCHAT_BASE_DIR="$HOME/nanochat-exp1/.cache/nanochat"
 mkdir -p $NANOCHAT_BASE_DIR
 
 # Set PyTorch memory management to reduce fragmentation
-export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:512"
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 
 RESULTS_DIR="$NANOCHAT_BASE_DIR/spellingbee_results"
 mkdir -p $RESULTS_DIR
