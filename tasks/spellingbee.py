@@ -266,11 +266,16 @@ class SpellingBeeConversation:
 
 class SpellingBee(Task):
 
-    def __init__(self, size=1000, split="train", **kwargs):
+    def __init__(self, size=1000, split="train", use_mistakes=False, **kwargs):
         super().__init__(**kwargs)
         assert split in ["train", "test"], "SpellingBee split must be train|test"
         self.size = size
         self.split = split
+        # Only use mistakes in train data, not eval.
+        if split == "train":
+            self.use_mistakes = use_mistakes
+        else:
+            self.use_mistakes = False
         filename = WORD_LIST_URL.split("/")[-1]
         word_list_path = download_file_with_lock(WORD_LIST_URL, filename)
         with open(word_list_path, "r", encoding="utf-8") as f:
@@ -297,7 +302,10 @@ class SpellingBee(Task):
 
         # Make a mistake 30% of the time.
         # TODO: code this as a hyperparam.
-        mistake = rng.random() < 0.3
+        if self.use_mistakes:
+            mistake = rng.random() < 0.3
+        else:
+            mistake = False
 
         # create a user message, with a bunch of variations as data augmentation
         template = rng.choice(USER_MSG_TEMPLATES)

@@ -60,6 +60,8 @@ parser.add_argument("--eval-every", type=int, default=100, help="evaluate val lo
 parser.add_argument("--eval-steps", type=int, default=100, help="number of batches for val loss evaluation")
 parser.add_argument("--eval-metrics-every", type=int, default=200, help="evaluate accuracy metrics every N steps")
 parser.add_argument("--eval-metrics-max-problems", type=int, default=1024, help="max problems per metric evaluation")
+# Experiment 1 - turn on/off mistakes in SpellingBee
+parser.add_argument("--use-mistakes", type=bool, default=False, help="whether to have 30%% of SpellingBee SFT problems contain mistakes+fixes")
 args = parser.parse_args()
 user_config = vars(args).copy()
 # -----------------------------------------------------------------------------
@@ -87,11 +89,11 @@ identity_conversations_filepath = os.path.join(get_base_dir(), "identity_convers
 train_ds = TaskMixture([
     ARC(subset="ARC-Easy", split="train"), # 2.3K rows
     ARC(subset="ARC-Challenge", split="train"), # 1.1K rows
-    GSM8K(subset="main", split="train"), # 8K rows
-    SmolTalk(split="train", stop=10_000), # 10K rows of smoltalk
+    # GSM8K(subset="main", split="train"), # 8K rows
+    # SmolTalk(split="train", stop=10_000), # 10K rows of smoltalk
     CustomJSON(filepath=identity_conversations_filepath), # 1K rows of synthetic identity conversations
     SimpleSpelling(size=300, split="train"), # 300 rows of Simple Spelling (e.g. spell the word 'apple')
-    SpellingBee(size=300, split="train"), # 300 rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
+    SpellingBee(size=300, split="train", use_mistakes=args.use_mistakes), # 300 rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
 ]) # 2.3K + 1.1K + 8K + 10K + 1K + 0.3K + 0.3K = 23K rows
 val_ds = SmolTalk(split="test") # general conversations, 24K rows (though we don't actually use all of it)
 
