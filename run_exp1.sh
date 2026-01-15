@@ -22,6 +22,9 @@ export OMP_NUM_THREADS=1
 export NANOCHAT_BASE_DIR="$HOME/nanochat-exp1/.cache/nanochat"
 mkdir -p $NANOCHAT_BASE_DIR
 
+# Set PyTorch memory management to reduce fragmentation
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True,max_split_size_mb:512"
+
 RESULTS_DIR="$NANOCHAT_BASE_DIR/spellingbee_results"
 mkdir -p $RESULTS_DIR
 
@@ -225,7 +228,6 @@ for m in "${MISTAKES[@]}"; do
     echo "Training SFT model (mistakes=${m})..."
     SFT_TRAIN_START=$(date +%s)
     torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- \
-        --depth=$d \
         --run="${WANDB_RUN}_${TAG}" \
         --model-tag="${TAG}" \
         --core-metric-every=999999 \
