@@ -410,7 +410,6 @@ def get_report(report_dir = None):
     else:
         report_dir = os.path.join(get_base_dir(), "report")
     if ddp_rank == 0:
-        report_dir = 
         return Report(report_dir)
     else:
         return DummyReport()
