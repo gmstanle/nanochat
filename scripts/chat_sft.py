@@ -90,8 +90,8 @@ identity_conversations_filepath = os.path.join(get_base_dir(), "identity_convers
 train_ds = TaskMixture([
     ARC(subset="ARC-Easy", split="train"), # 2.3K rows
     ARC(subset="ARC-Challenge", split="train"), # 1.1K rows
-    # GSM8K(subset="main", split="train"), # 8K rows
-    # SmolTalk(split="train", stop=10_000), # 10K rows of smoltalk
+    GSM8K(subset="main", split="train"), # 8K rows
+    SmolTalk(split="train", stop=10_000), # 10K rows of smoltalk
     CustomJSON(filepath=identity_conversations_filepath), # 1K rows of synthetic identity conversations
     SimpleSpelling(size=300, split="train"), # 300 rows of Simple Spelling (e.g. spell the word 'apple')
     SpellingBee(size=300, split="train", use_mistakes=use_mistakes), # 300 rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
