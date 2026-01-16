@@ -231,10 +231,6 @@ for m in "${MISTAKES[@]}"; do
         --device-batch-size=16 \
         --run="${WANDB_RUN}_${TAG}" \
         --model-tag="${TAG}" \
-        --core-metric-every=999999 \
-        --core-metric-max-per-task=-1 \
-        --sample-every=-1 \
-        --save-every=-1 \
         --use-mistakes="${m}" \
         2>&1 | tee "$RESULTS_DIR/${TAG}_train.log"
     SFT_TRAIN_END=$(date +%s)
