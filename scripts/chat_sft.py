@@ -61,7 +61,7 @@ parser.add_argument("--eval-steps", type=int, default=100, help="number of batch
 parser.add_argument("--eval-metrics-every", type=int, default=200, help="evaluate accuracy metrics every N steps")
 parser.add_argument("--eval-metrics-max-problems", type=int, default=1024, help="max problems per metric evaluation")
 # Experiment 1 - turn on/off mistakes in SpellingBee
-parser.add_argument("--mistakes", type=str, default="no", help="whether to have 30%% of SpellingBee SFT problems contain mistakes+fixes")
+parser.add_argument("--use-mistakes", type=str, default="no", help="whether to have 30%% of SpellingBee SFT problems contain mistakes+fixes")
 args = parser.parse_args()
 use_mistakes = args.use_mistakes == "yes"
 user_config = vars(args).copy()
