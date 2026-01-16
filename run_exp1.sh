@@ -209,7 +209,7 @@ SFT_OVERALL_START=$(date +%s)
 
 # train sft and re-eval right away (should see a small bump)
 # Unique tag for this run
-MISTAKES=("True" "False")
+MISTAKES=("yes" "no")
 for m in "${MISTAKES[@]}"; do
 
     echo "=========================================="
