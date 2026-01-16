@@ -3,6 +3,8 @@ New and upgraded chat mode because a lot of the code has changed since the last 
 
 Intended to be run single GPU only atm:
 python -m scripts.chat_cli -i mid
+
+TODO: upgrade to detect and implement python tool-calling.
 """
 import argparse
 import torch
