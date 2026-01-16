@@ -28,6 +28,9 @@ export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True"
 RESULTS_DIR="$NANOCHAT_BASE_DIR/spellingbee_results"
 mkdir -p $RESULTS_DIR
 
+# Number of processes/GPUs to use
+NPROC_PER_NODE=8
+
 # -----------------------------------------------------------------------------
 # Python venv setup with uv
 
@@ -131,9 +134,6 @@ echo ""
 # echo "Waiting for dataset download to complete..."
 # wait $DATASET_DOWNLOAD_PID
 # echo "Dataset download complete"
-
-# # Number of processes/GPUs to use
-# NPROC_PER_NODE=8
 
 # # pretrain the d20 model
 # echo "Pretraining d20 model (561M params, Chinchilla 20x)..."
