@@ -186,18 +186,18 @@ echo ""
 # MIDTRAIN_TIME=$((MIDTRAIN_END - MIDTRAIN_START))
 # echo "Completed midtraining in ${MIDTRAIN_TIME}s"
 
-echo "Evaluating midtrained model..."
-MIDEVAL_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i mid
-MIDEVAL_END=$(date +%s)
-MIDEVAL_TIME=$((MIDEVAL_END - MIDEVAL_START))
-echo "Completed mid evaluation in ${MIDEVAL_TIME}s"
+# echo "Evaluating midtrained model..."
+# MIDEVAL_START=$(date +%s)
+# torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_eval -- -i mid
+# MIDEVAL_END=$(date +%s)
+# MIDEVAL_TIME=$((MIDEVAL_END - MIDEVAL_START))
+# echo "Completed mid evaluation in ${MIDEVAL_TIME}s"
 
-MID_END=$(date +%s)
-MID_TIME=$((MID_END - MID_START))
-echo "Completed Midtraining (total) in ${MID_TIME}s"
-echo "=========================================="
-echo ""
+# MID_END=$(date +%s)
+# MID_TIME=$((MID_END - MID_START))
+# echo "Completed Midtraining (total) in ${MID_TIME}s"
+# echo "=========================================="
+# echo ""
 
 # -----------------------------------------------------------------------------
 # Supervised Finetuning (domain adaptation to each sequence all by itself per row)
