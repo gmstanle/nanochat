@@ -195,7 +195,6 @@ if __name__ == "__main__":
     parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
     parser.add_argument('-x', '--max-problems', type=int, default=None, help='Max problems to evaluate')
     parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
-    parser.add_argument("--model-tag", type=str, default='', help="model tag to specify report filename")
 
     args = parser.parse_args()
 
@@ -250,7 +249,8 @@ if __name__ == "__main__":
             centered_mean += centered_acc
         chatcore_metric = centered_mean / len(results)
         chatcore_metric_dict = {"ChatCORE metric": chatcore_metric}
-    get_report().log(section=args.model_tag + "Chat evaluation " + args.source, data=[
+    model_tag = args.model_tag if args.model_tag else ""
+    get_report().log(section=model_tag + "Chat evaluation " + args.source, data=[
         vars(args), # CLI args
         results,
         chatcore_metric_dict,
