@@ -25,6 +25,9 @@ dependencies = [
     "wandb>=0.24.0",
 ]
 
+[tool.setuptools]
+packages = ["nanochat"]
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
