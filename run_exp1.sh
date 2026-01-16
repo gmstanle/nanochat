@@ -82,109 +82,109 @@ echo ""
 # -----------------------------------------------------------------------------
 # Tokenizer
 
-echo "=========================================="
-echo "Starting Tokenizer Training"
-echo "Start time: $(date)"
-TOK_START=$(date +%s)
+# echo "=========================================="
+# echo "Starting Tokenizer Training"
+# echo "Start time: $(date)"
+# TOK_START=$(date +%s)
 
-# Download the first ~2B characters of pretraining dataset
-# look at dev/repackage_data_reference.py for details on how this data was prepared
-# each data shard is ~250M chars
-# so we download 2e9 / 250e6 = 8 data shards at this point
-# each shard is ~100MB of text (compressed), so this is about ~800MB of data on disk
-echo "Downloading 8 data shards for tokenizer training..."
-python -m nanochat.dataset -n 8
-# Immediately also kick off downloading more shards in the background while tokenizer trains
-# See comment below for why 370 is the right number here
-echo "Starting background download of 370 shards..."
-python -m nanochat.dataset -n 370 &
-DATASET_DOWNLOAD_PID=$!
-# train the tokenizer with vocab size 2**16 = 65536 on ~2B characters of data
-echo "Training tokenizer (vocab_size=65536, max_chars=2B)..."
-python -m scripts.tok_train --max-chars=2000000000 --vocab-size=65536
-# evaluate the tokenizer (report compression ratio etc.)
-echo "Evaluating tokenizer..."
-python -m scripts.tok_eval
+# # Download the first ~2B characters of pretraining dataset
+# # look at dev/repackage_data_reference.py for details on how this data was prepared
+# # each data shard is ~250M chars
+# # so we download 2e9 / 250e6 = 8 data shards at this point
+# # each shard is ~100MB of text (compressed), so this is about ~800MB of data on disk
+# echo "Downloading 8 data shards for tokenizer training..."
+# python -m nanochat.dataset -n 8
+# # Immediately also kick off downloading more shards in the background while tokenizer trains
+# # See comment below for why 370 is the right number here
+# echo "Starting background download of 370 shards..."
+# python -m nanochat.dataset -n 370 &
+# DATASET_DOWNLOAD_PID=$!
+# # train the tokenizer with vocab size 2**16 = 65536 on ~2B characters of data
+# echo "Training tokenizer (vocab_size=65536, max_chars=2B)..."
+# python -m scripts.tok_train --max-chars=2000000000 --vocab-size=65536
+# # evaluate the tokenizer (report compression ratio etc.)
+# echo "Evaluating tokenizer..."
+# python -m scripts.tok_eval
 
-TOK_END=$(date +%s)
-TOK_TIME=$((TOK_END - TOK_START))
-echo "Completed Tokenizer Training in ${TOK_TIME}s"
-echo "=========================================="
-echo ""
+# TOK_END=$(date +%s)
+# TOK_TIME=$((TOK_END - TOK_START))
+# echo "Completed Tokenizer Training in ${TOK_TIME}s"
+# echo "=========================================="
+# echo ""
 
-# -----------------------------------------------------------------------------
-# Base model (pretraining)
+# # -----------------------------------------------------------------------------
+# # Base model (pretraining)
 
-echo "=========================================="
-echo "Starting Base Model Pretraining"
-echo "Start time: $(date)"
-BASE_START=$(date +%s)
+# echo "=========================================="
+# echo "Starting Base Model Pretraining"
+# echo "Start time: $(date)"
+# BASE_START=$(date +%s)
 
-# The d20 model is 561M parameters.
-# Chinchilla says #tokens = 20X #params, so we need 561e6 * 20 = 11.2B tokens.
-# Assume our tokenizer is 4.8 chars/token, this is 11.2B * 4.8 ~= 54B chars.
-# At 250M chars/shard, this is 54B / 250M ~= 216 shards needed for pretraining.
-# Round up to 240 for safety. Also, the new DataLoader wastes about 35% of tokens to cropping
-# so 240 / (1 - 0.35) = 370 shards are needed.
-# At ~100MB/shard, this downloads ~37GB of data to disk.
-# (The total number of shards available in the entire dataset is 1822.)
-echo "Waiting for dataset download to complete..."
-wait $DATASET_DOWNLOAD_PID
-echo "Dataset download complete"
+# # The d20 model is 561M parameters.
+# # Chinchilla says #tokens = 20X #params, so we need 561e6 * 20 = 11.2B tokens.
+# # Assume our tokenizer is 4.8 chars/token, this is 11.2B * 4.8 ~= 54B chars.
+# # At 250M chars/shard, this is 54B / 250M ~= 216 shards needed for pretraining.
+# # Round up to 240 for safety. Also, the new DataLoader wastes about 35% of tokens to cropping
+# # so 240 / (1 - 0.35) = 370 shards are needed.
+# # At ~100MB/shard, this downloads ~37GB of data to disk.
+# # (The total number of shards available in the entire dataset is 1822.)
+# echo "Waiting for dataset download to complete..."
+# wait $DATASET_DOWNLOAD_PID
+# echo "Dataset download complete"
 
-# Number of processes/GPUs to use
-NPROC_PER_NODE=8
+# # Number of processes/GPUs to use
+# NPROC_PER_NODE=8
 
-# pretrain the d20 model
-echo "Pretraining d20 model (561M params, Chinchilla 20x)..."
-PRETRAIN_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --device-batch-size=16 --target-param-data-ratio=20 --run=$WANDB_RUN
-PRETRAIN_END=$(date +%s)
-PRETRAIN_TIME=$((PRETRAIN_END - PRETRAIN_START))
-echo "Completed pretraining in ${PRETRAIN_TIME}s"
+# # pretrain the d20 model
+# echo "Pretraining d20 model (561M params, Chinchilla 20x)..."
+# PRETRAIN_START=$(date +%s)
+# torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_train -- --depth=20 --device-batch-size=16 --target-param-data-ratio=20 --run=$WANDB_RUN
+# PRETRAIN_END=$(date +%s)
+# PRETRAIN_TIME=$((PRETRAIN_END - PRETRAIN_START))
+# echo "Completed pretraining in ${PRETRAIN_TIME}s"
 
-# evaluate the model on a larger chunk of train/val data and draw some samples
-echo "Evaluating base loss on train/val splits..."
-BASELOSS_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss -- --device-batch-size=16
-BASELOSS_END=$(date +%s)
-BASELOSS_TIME=$((BASELOSS_END - BASELOSS_START))
-echo "Completed base_loss evaluation in ${BASELOSS_TIME}s"
+# # evaluate the model on a larger chunk of train/val data and draw some samples
+# echo "Evaluating base loss on train/val splits..."
+# BASELOSS_START=$(date +%s)
+# torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_loss -- --device-batch-size=16
+# BASELOSS_END=$(date +%s)
+# BASELOSS_TIME=$((BASELOSS_END - BASELOSS_START))
+# echo "Completed base_loss evaluation in ${BASELOSS_TIME}s"
 
-# evaluate the model on CORE tasks
-echo "Evaluating on CORE benchmark tasks..."
-BASEEVAL_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval
-BASEEVAL_END=$(date +%s)
-BASEEVAL_TIME=$((BASEEVAL_END - BASEEVAL_START))
-echo "Completed CORE evaluation in ${BASEEVAL_TIME}s"
+# # evaluate the model on CORE tasks
+# echo "Evaluating on CORE benchmark tasks..."
+# BASEEVAL_START=$(date +%s)
+# torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.base_eval
+# BASEEVAL_END=$(date +%s)
+# BASEEVAL_TIME=$((BASEEVAL_END - BASEEVAL_START))
+# echo "Completed CORE evaluation in ${BASEEVAL_TIME}s"
 
-BASE_END=$(date +%s)
-BASE_TIME=$((BASE_END - BASE_START))
-echo "Completed Base Model Pretraining (total) in ${BASE_TIME}s"
-echo "=========================================="
-echo ""
+# BASE_END=$(date +%s)
+# BASE_TIME=$((BASE_END - BASE_START))
+# echo "Completed Base Model Pretraining (total) in ${BASE_TIME}s"
+# echo "=========================================="
+# echo ""
 
-# -----------------------------------------------------------------------------
-# Midtraining (teach the model conversation special tokens, tool use, multiple choice)
+# # -----------------------------------------------------------------------------
+# # Midtraining (teach the model conversation special tokens, tool use, multiple choice)
 
-echo "=========================================="
-echo "Starting Midtraining"
-echo "Start time: $(date)"
-MID_START=$(date +%s)
+# echo "=========================================="
+# echo "Starting Midtraining"
+# echo "Start time: $(date)"
+# MID_START=$(date +%s)
 
-# download 2.3MB of synthetic identity conversations to impart a personality to nanochat
-# see dev/gen_synthetic_data.py for details on how this data was prepared and to get a sense of how you can easily tune it
-echo "Downloading synthetic identity conversations..."
-curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
+# # download 2.3MB of synthetic identity conversations to impart a personality to nanochat
+# # see dev/gen_synthetic_data.py for details on how this data was prepared and to get a sense of how you can easily tune it
+# echo "Downloading synthetic identity conversations..."
+# curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
 
-# run midtraining and eval the model
-echo "Running midtraining (conversation format, tool use, multiple choice)..."
-MIDTRAIN_START=$(date +%s)
-torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --device-batch-size=16 --run=$WANDB_RUN
-MIDTRAIN_END=$(date +%s)
-MIDTRAIN_TIME=$((MIDTRAIN_END - MIDTRAIN_START))
-echo "Completed midtraining in ${MIDTRAIN_TIME}s"
+# # run midtraining and eval the model
+# echo "Running midtraining (conversation format, tool use, multiple choice)..."
+# MIDTRAIN_START=$(date +%s)
+# torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.mid_train -- --device-batch-size=16 --run=$WANDB_RUN
+# MIDTRAIN_END=$(date +%s)
+# MIDTRAIN_TIME=$((MIDTRAIN_END - MIDTRAIN_START))
+# echo "Completed midtraining in ${MIDTRAIN_TIME}s"
 
 echo "Evaluating midtrained model..."
 MIDEVAL_START=$(date +%s)
