@@ -228,7 +228,6 @@ for m in "${MISTAKES[@]}"; do
     echo "Training SFT model (mistakes=${m})..."
     SFT_TRAIN_START=$(date +%s)
     torchrun --standalone --nproc_per_node=$NPROC_PER_NODE -m scripts.chat_sft -- \
-        --device-batch-size=16 \
         --run="${WANDB_RUN}_${TAG}" \
         --model-tag="${TAG}" \
         --use-mistakes="${m}" \
