@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(/usr/bin/python3:*)",
+      "Bash(/opt/homebrew/bin/python3:*)",
+      "Bash(git checkout:*)",
+      "Bash(git pull:*)",
+      "Bash(python -m tasks.spellingbee:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
