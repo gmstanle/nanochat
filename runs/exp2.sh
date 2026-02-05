@@ -5,10 +5,38 @@
 
 # 1) Example launch (simplest):
 # bash runs/exp2.sh
-# 2) Example launch in a screen session (because the run takes ~3 hours):
+# 2) Quick test run (100 iterations for base_train and chat_sft):
+# bash runs/exp2.sh --testrun
+# 3) Example launch in a screen session (because the run takes ~3 hours):
 # screen -L -Logfile runs/exp2.log -S exp2 bash runs/exp2.sh
-# 3) Example launch with wandb logging, but see below for setting up wandb first:
+# 4) Example launch with wandb logging, but see below for setting up wandb first:
 # WANDB_RUN=exp2 screen -L -Logfile runs/exp2.log -S exp2 bash runs/exp2.sh
+
+# -----------------------------------------------------------------------------
+# User-configurable parameters
+DEPTH=26
+
+# -----------------------------------------------------------------------------
+# Parse command line arguments
+TESTRUN=false
+for arg in "$@"; do
+    case $arg in
+        --testrun)
+            TESTRUN=true
+            shift
+            ;;
+    esac
+done
+
+if [ "$TESTRUN" = true ]; then
+    echo "TESTRUN mode: using depth=12, --num-iterations=100 for base_train and chat_sft"
+    DEPTH=12
+    BASE_TRAIN_HORIZON="--num-iterations=100"
+    SFT_HORIZON="--num-iterations=100"
+else
+    BASE_TRAIN_HORIZON="--target-param-data-ratio=8.5"
+    SFT_HORIZON=""
+fi
 
 # Default intermediate artifacts directory is in ~/.cache/nanochat
 export OMP_NUM_THREADS=1
@@ -76,9 +104,8 @@ python -m scripts.tok_eval
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
-# d12 model for quick testing (A100: no --fp8, use --window-pattern L since SDPA lacks sliding window)
-# --num-iterations=100 for quick debug runs; remove or increase for real experiments
-$LAUNCHER -m scripts.base_train -- --depth=12 --num-iterations=100 --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
+# A100: no --fp8, use --window-pattern L since SDPA lacks sliding window
+$LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
 # evaluate the model: CORE metric, BPB on train/val, and draw samples
 $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 
@@ -90,8 +117,7 @@ $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
 
 # run SFT and eval the model
-# --num-iterations=100 for quick debug runs; remove or increase for real experiments
-$LAUNCHER -m scripts.chat_sft -- --num-iterations=100 --device-batch-size=16 --run=$WANDB_RUN
+$LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run=$WANDB_RUN
 $LAUNCHER -m scripts.chat_eval -- -i sft
 
 # chat with the model over CLI! Leave out the -p to chat interactively
