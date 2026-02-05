@@ -77,7 +77,8 @@ echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
 # d12 model for quick testing (A100: no --fp8, use --window-pattern L since SDPA lacks sliding window)
-$LAUNCHER -m scripts.base_train -- --depth=12 --target-param-data-ratio=8.5 --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
+# --num-iterations=100 for quick debug runs; remove or increase for real experiments
+$LAUNCHER -m scripts.base_train -- --depth=12 --num-iterations=100 --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
 # evaluate the model: CORE metric, BPB on train/val, and draw samples
 $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 
@@ -89,7 +90,8 @@ $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
 
 # run SFT and eval the model
-$LAUNCHER -m scripts.chat_sft -- --device-batch-size=16 --run=$WANDB_RUN
+# --num-iterations=100 for quick debug runs; remove or increase for real experiments
+$LAUNCHER -m scripts.chat_sft -- --num-iterations=100 --device-batch-size=16 --run=$WANDB_RUN
 $LAUNCHER -m scripts.chat_eval -- -i sft
 
 # chat with the model over CLI! Leave out the -p to chat interactively
