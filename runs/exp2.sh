@@ -16,6 +16,13 @@ export NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
 mkdir -p $NANOCHAT_BASE_DIR
 
 # -----------------------------------------------------------------------------
+# GPU detection: auto-detect number of GPUs
+NUM_GPUS=$(nvidia-smi -L 2>/dev/null | wc -l)
+NUM_GPUS=${NUM_GPUS:-1}  # default to 1 if nvidia-smi fails
+LAUNCHER="torchrun --standalone --nproc_per_node=$NUM_GPUS"
+echo "Detected $NUM_GPUS GPU(s), using: $LAUNCHER"
+
+# -----------------------------------------------------------------------------
 # Python venv setup with uv
 
 # install uv (if not already installed)
@@ -70,9 +77,9 @@ echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
 # d12 model for quick testing (A100: no --fp8, use --window-pattern L since SDPA lacks sliding window)
-torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- --depth=12 --target-param-data-ratio=8.5 --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
+$LAUNCHER -m scripts.base_train -- --depth=12 --target-param-data-ratio=8.5 --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
 # evaluate the model: CORE metric, BPB on train/val, and draw samples
-torchrun --standalone --nproc_per_node=8 -m scripts.base_eval -- --device-batch-size=16
+$LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 
 # -----------------------------------------------------------------------------
 # SFT (teach the model conversation special tokens, tool use, multiple choice)
@@ -82,8 +89,8 @@ torchrun --standalone --nproc_per_node=8 -m scripts.base_eval -- --device-batch-
 curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
 
 # run SFT and eval the model
-torchrun --standalone --nproc_per_node=8 -m scripts.chat_sft -- --device-batch-size=16 --run=$WANDB_RUN
-torchrun --standalone --nproc_per_node=8 -m scripts.chat_eval -- -i sft
+$LAUNCHER -m scripts.chat_sft -- --device-batch-size=16 --run=$WANDB_RUN
+$LAUNCHER -m scripts.chat_eval -- -i sft
 
 # chat with the model over CLI! Leave out the -p to chat interactively
 # python -m scripts.chat_cli -p "Why is the sky blue?"
