@@ -87,6 +87,12 @@ if [ -z "$WANDB_RUN" ]; then
     WANDB_RUN=dummy
 fi
 
+echo "---------------------"
+echo "BEGINNING NEW RUN"
+echo "num GPUs: $NUM_GPUS. testrun=$TESTRUN. depth=$DEPTH."
+echo "dir for run checkpoints and eval reports: $NANOCHAT_BASE_DIR"
+echo "---------------------"
+
 # -----------------------------------------------------------------------------
 # During the course of the run, we will be writing markdown reports to the report/
 # directory in the base dir. This command clears it out and writes a header section
@@ -96,6 +102,9 @@ python -m nanochat.report reset
 # -----------------------------------------------------------------------------
 # Tokenizer
 
+echo "---------------------"
+echo "Beginning dataset download and tokenization"
+echo "---------------------"
 # Download the first ~2B characters of pretraining dataset
 # each data shard is ~250M chars
 # so we download 2e9 / 250e6 = 8 data shards at this point
@@ -117,17 +126,29 @@ python -m scripts.tok_eval
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
+echo "---------------------"
+echo "Beginning pretraining"
+echo "---------------------"
+
 BASE_CKPT_DIR="$NANOCHAT_BASE_DIR/base_checkpoints/d$DEPTH"
 if ls "$BASE_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
     echo "Base model checkpoint found at $BASE_CKPT_DIR, skipping base_train and base_eval"
 else
     $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run=$WANDB_RUN
+    
+    echo "---------------------"
+    echo "beginning post-pretrain eval"
+    echo "---------------------"
+
     # evaluate the model: CORE metric, BPB on train/val, and draw samples
     $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 fi
 
 # -----------------------------------------------------------------------------
 # SFT (teach the model conversation special tokens, tool use, multiple choice)
+echo "---------------------"
+echo "Beginning SFT"
+echo "---------------------"
 
 # download 2.3MB of synthetic identity conversations to impart a personality to nanochat
 # see dev/gen_synthetic_data.py for details on how this data was prepared and to get a sense of how you can easily tune it
@@ -139,13 +160,27 @@ if ls "$SFT_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
 else
     # run SFT and eval the model
     $LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run=$WANDB_RUN
+
+    echo "---------------------"
+    echo "beginning post-SFT eval"
+    echo "---------------------"
+
     $LAUNCHER -m scripts.chat_eval -- -i sft
 fi
 
 # -----------------------------------------------------------------------------
 # RL (reinforcement learning on GSM8K)
+
+echo "---------------------"
+echo "Beginning RL"
+echo "---------------------"
+
 # Note: no --num-iterations available; uses --num-epochs (default 1 = ~466 steps)
 $LAUNCHER -m scripts.chat_rl -- --device-batch-size=8 --run=$WANDB_RUN
+echo "---------------------"
+echo "beginning post-RL eval"
+echo "---------------------"
+
 $LAUNCHER -m scripts.chat_eval -- -i rl
 
 # chat with the model over CLI! Leave out the -p to chat interactively
@@ -157,4 +192,7 @@ $LAUNCHER -m scripts.chat_eval -- -i rl
 # -----------------------------------------------------------------------------
 # Generate the full report by putting together all the sections
 # report.md is the output and will be copied to current directory for convenience
+echo ""
+echo "Report generation"
+echo ""
 python -m nanochat.report generate
