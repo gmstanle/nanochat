@@ -44,10 +44,23 @@ export NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
 mkdir -p $NANOCHAT_BASE_DIR
 
 # -----------------------------------------------------------------------------
-# GPU detection: auto-detect number of GPUs
+# GPU detection: auto-detect number and type of GPUs
 NUM_GPUS=$(nvidia-smi -L 2>/dev/null | wc -l)
 NUM_GPUS=${NUM_GPUS:-1}  # default to 1 if nvidia-smi fails
 LAUNCHER="torchrun --standalone --nproc_per_node=$NUM_GPUS"
+
+GPU_NAME=$(nvidia-smi -L 2>/dev/null | head -1)
+if echo "$GPU_NAME" | grep -qi "H100"; then
+    echo "Detected H100: enabling --fp8 and default window pattern"
+    GPU_FLAGS="--fp8"
+elif echo "$GPU_NAME" | grep -qi "A100"; then
+    echo "Detected A100: no --fp8, using --window-pattern L (SDPA lacks sliding window)"
+    GPU_FLAGS="--window-pattern L"
+else
+    echo "Unknown GPU ($GPU_NAME): defaulting to A100 settings (no --fp8, --window-pattern L)"
+    GPU_FLAGS="--window-pattern L"
+fi
+
 echo "Detected $NUM_GPUS GPU(s), using: $LAUNCHER"
 
 # -----------------------------------------------------------------------------
@@ -104,8 +117,7 @@ python -m scripts.tok_eval
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
-# A100: no --fp8, use --window-pattern L since SDPA lacks sliding window
-$LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
+$LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run=$WANDB_RUN
 # evaluate the model: CORE metric, BPB on train/val, and draw samples
 $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 
