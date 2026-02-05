@@ -13,3 +13,5 @@
    - Did some research/talked to AI and seems like that is due to using on-policy RL
    - On-policy has stability benefits but is slow — I think because it runs one sample at a time rather than batch processing
    - Offline is supposedly much faster due to batch processing but has stability issues, presumably because each sample in the batch produces a different policy? Something like that.
+
+Currently reading through https://cameronrwolfe.substack.com/p/reinforce 
