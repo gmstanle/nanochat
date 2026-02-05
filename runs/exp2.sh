@@ -117,9 +117,14 @@ python -m scripts.tok_eval
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
-$LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run=$WANDB_RUN
-# evaluate the model: CORE metric, BPB on train/val, and draw samples
-$LAUNCHER -m scripts.base_eval -- --device-batch-size=16
+BASE_CKPT_DIR="$NANOCHAT_BASE_DIR/base_checkpoints/d$DEPTH"
+if ls "$BASE_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
+    echo "Base model checkpoint found at $BASE_CKPT_DIR, skipping base_train and base_eval"
+else
+    $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run=$WANDB_RUN
+    # evaluate the model: CORE metric, BPB on train/val, and draw samples
+    $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
+fi
 
 # -----------------------------------------------------------------------------
 # SFT (teach the model conversation special tokens, tool use, multiple choice)
@@ -128,9 +133,20 @@ $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
 # see dev/gen_synthetic_data.py for details on how this data was prepared and to get a sense of how you can easily tune it
 curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
 
-# run SFT and eval the model
-$LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run=$WANDB_RUN
-$LAUNCHER -m scripts.chat_eval -- -i sft
+SFT_CKPT_DIR="$NANOCHAT_BASE_DIR/chatsft_checkpoints/d$DEPTH"
+if ls "$SFT_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
+    echo "SFT checkpoint found at $SFT_CKPT_DIR, skipping chat_sft and chat_eval"
+else
+    # run SFT and eval the model
+    $LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run=$WANDB_RUN
+    $LAUNCHER -m scripts.chat_eval -- -i sft
+fi
+
+# -----------------------------------------------------------------------------
+# RL (reinforcement learning on GSM8K)
+# Note: no --num-iterations available; uses --num-epochs (default 1 = ~466 steps)
+$LAUNCHER -m scripts.chat_rl -- --device-batch-size=8 --run=$WANDB_RUN
+$LAUNCHER -m scripts.chat_eval -- -i rl
 
 # chat with the model over CLI! Leave out the -p to chat interactively
 # python -m scripts.chat_cli -p "Why is the sky blue?"
