@@ -40,7 +40,8 @@ fi
 
 # Default intermediate artifacts directory is in ~/.cache/nanochat
 export OMP_NUM_THREADS=1
-export NANOCHAT_BASE_DIR="$HOME/.cache/nanochat"
+# for Lambda instance, only files under ~/instance-name are kept.
+export NANOCHAT_BASE_DIR="$HOME/nanochat-exp2/.cache/nanochat"
 mkdir -p $NANOCHAT_BASE_DIR
 
 # -----------------------------------------------------------------------------
