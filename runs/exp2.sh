@@ -69,8 +69,8 @@ python -m scripts.tok_eval
 echo "Waiting for dataset download to complete..."
 wait $DATASET_DOWNLOAD_PID
 
-# d12 model for quick testing
-torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- --depth=12 --target-param-data-ratio=8.5 --device-batch-size=16 --fp8 --run=$WANDB_RUN
+# d12 model for quick testing (A100: no --fp8, use --window-pattern L since SDPA lacks sliding window)
+torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- --depth=12 --target-param-data-ratio=8.5 --device-batch-size=16 --window-pattern L --run=$WANDB_RUN
 # evaluate the model: CORE metric, BPB on train/val, and draw samples
 torchrun --standalone --nproc_per_node=8 -m scripts.base_eval -- --device-batch-size=16
 

@@ -6,7 +6,8 @@
       "Bash(/opt/homebrew/bin/python3:*)",
       "Bash(git checkout:*)",
       "Bash(git pull:*)",
-      "Bash(python -m tasks.spellingbee:*)"
+      "Bash(python -m tasks.spellingbee:*)",
+      "Bash(xargs:*)"
     ],
     "deny": [],
     "ask": []
