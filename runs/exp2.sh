@@ -29,13 +29,15 @@ for arg in "$@"; do
 done
 
 if [ "$TESTRUN" = true ]; then
-    echo "TESTRUN mode: using depth=12, --num-iterations=100 for base_train and chat_sft"
+    echo "TESTRUN mode: using depth=12, --num-iterations=100 for base_train and chat_sft, --max-problems=16 for chat_eval"
     DEPTH=12
     BASE_TRAIN_HORIZON="--num-iterations=100"
     SFT_HORIZON="--num-iterations=100"
+    CHAT_EVAL_MAX_PROBLEMS="--max-problems=16"
 else
     BASE_TRAIN_HORIZON="--target-param-data-ratio=8.5"
     SFT_HORIZON=""
+    CHAT_EVAL_MAX_PROBLEMS=""
 fi
 
 # Default intermediate artifacts directory is in ~/.cache/nanochat
@@ -166,7 +168,7 @@ else
     echo "beginning post-SFT eval"
     echo "---------------------"
 
-    $LAUNCHER -m scripts.chat_eval -- -i sft
+    $LAUNCHER -m scripts.chat_eval -- -i sft $CHAT_EVAL_MAX_PROBLEMS
 fi
 
 # -----------------------------------------------------------------------------
@@ -182,7 +184,7 @@ echo "---------------------"
 echo "beginning post-RL eval"
 echo "---------------------"
 
-$LAUNCHER -m scripts.chat_eval -- -i rl
+$LAUNCHER -m scripts.chat_eval -- -i rl $CHAT_EVAL_MAX_PROBLEMS
 
 # chat with the model over CLI! Leave out the -p to chat interactively
 # python -m scripts.chat_cli -p "Why is the sky blue?"

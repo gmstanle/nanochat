@@ -146,6 +146,7 @@ def get_batch():
         # So we will (correctly) end up not training on the prompt tokens, or the tool use forced tokens.
         rewards = torch.tensor(rewards, dtype=torch.float, device=device)
         # Calculate the advantages by simply subtracting the mean (instead of z-score (x-mu)/sigma)
+        # TODO: mean over what?
         mu = rewards.mean()
         advantages = rewards - mu
         # yield inputs/targets as (B, T) of ids and rewards as (B,) of floats
@@ -228,6 +229,7 @@ batch_iterator = get_batch()
 for step in range(num_steps):
 
     # Evaluate the model once in a while and log to wandb
+    # gstanley: not relevant for speed.
     if step % args.eval_every == 0:
         model.eval()
         passk = torch.zeros(args.device_batch_size, device=device) # pass@k for k=1..device_batch_size
@@ -250,6 +252,7 @@ for step in range(num_steps):
         })
 
     # Forward/Backward on rollouts over multiple examples in the dataset
+    # TODO: focus here to understand speed.
     rewards_list = []
     sequence_lengths = []
     for example_step in range(examples_per_rank):
