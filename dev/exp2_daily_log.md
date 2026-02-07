@@ -1,6 +1,34 @@
-# Experiment 2: Daily Log
+# Experiment 2: Log
+
+## 2026-02-06
+
+- Research on past RL results
+   - indeed, GSM8K perf was very low.	Base: 0.0250	SFT: 0.0455	RL: 0.0758
+   - seems like real improvement, but is 8% success on ~1500 validation samples
+      enough to read off small improvements and hill climb? Possible, but not ideal.
+   - Real problem is 90-95% of compute is used on wrong answers. So if compute
+     efficiency is more important (e.g., for pedagogy, rapid experimentation),
+     then we want higher success rate.
+
+- IDEA: INFRA: want to make run script automatically push all eval results to google drive.
+  even w/chatgpt theres gonna be a bit of pain with setup so for now just leave evals on labmda.
+
+
 
 ## 2026-02-05
+
+### Next steps
+
+- dig up
+    GSM8k scores (old nanochat commmit or gstanly/exp1). Answer question: **Is it even worth trying to
+    RL on GSM8k with a d20-size model?** I recall karpathy posting 4% success rate after
+    fine tuning and 8% after RL on a d26 model. This may be too small to give meaningful
+   signal for experimentation anyway.
+    
+- Switch to a simpler task (counting letters?) for small-model RL experimentation?
+  - Use SpellingBee?
+  - TODO: Check SpellingBee scores @ small model size. If 30-60%, could be a great candidate for RL.
+
 
 ### Notes
 
@@ -14,9 +42,8 @@
 - At least I got ~90 steps of RL to run without error on the d12 model, so I can be confident that larger-model runs will also work (unless OOM).
 - Observation: the average reward of the d12 model is usually zero, so there is no learning happening. Unlike supervised training (where there are enough correct tokens in even small models for learning to happen), it seems like I need a model large enough to get some answers right for GSM8K-based RL to work.
 - From `README.md`, Karpathy suggests using d12 models to experiment and optimize against validation loss, CORE metric, and compute. Seems this won’t work for GSM8K-based RL.
-### Next steps
 
-- IDEA: switch to a simpler task (counting letters?) for RL experimentation.
+
 
 ## 2025-02-04
 
