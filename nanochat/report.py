@@ -402,7 +402,13 @@ def get_report():
     from nanochat.common import get_base_dir, get_dist_info
     ddp, ddp_rank, ddp_local_rank, ddp_world_size = get_dist_info()
     if ddp_rank == 0:
-        report_dir = os.path.join(get_base_dir(), "report")
+        base_dir = get_base_dir()
+        run_dir = os.environ.get("NANOCHAT_RUN_DIR")
+        run_id = os.environ.get("NANOCHAT_RUN_ID")
+        if not run_dir and run_id:
+            run_dir = os.path.join(base_dir, "runs", run_id)
+        report_root = run_dir if run_dir else base_dir
+        report_dir = os.path.join(report_root, "report")
         return Report(report_dir)
     else:
         return DummyReport()

@@ -17,6 +17,14 @@
 DEPTH=26
 
 # -----------------------------------------------------------------------------
+# Shared exp2 config (e.g., NANOCHAT_BASE_DIR_RAW)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/exp2_env.sh" ]]; then
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/exp2_env.sh"
+fi
+
+# -----------------------------------------------------------------------------
 # Parse command line arguments
 TESTRUN=false
 for arg in "$@"; do
@@ -43,8 +51,25 @@ fi
 # Default intermediate artifacts directory is in ~/.cache/nanochat
 export OMP_NUM_THREADS=1
 # for Lambda instance, only files under ~/instance-name are kept.
-export NANOCHAT_BASE_DIR="$HOME/nanochat-exp2/.cache/nanochat"
-mkdir -p $NANOCHAT_BASE_DIR
+if [[ -z "${NANOCHAT_BASE_DIR_RAW:-}" ]]; then
+    NANOCHAT_BASE_DIR_RAW='~/nanochat-exp2/.cache/nanochat'
+fi
+NANOCHAT_BASE_DIR="$(eval echo "$NANOCHAT_BASE_DIR_RAW")"
+export NANOCHAT_BASE_DIR
+mkdir -p "$NANOCHAT_BASE_DIR"
+
+# -----------------------------------------------------------------------------
+# Run identity (date + commit hash)
+RUN_DATE="$(date +%Y-%m-%d)"
+GIT_HASH="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+RUN_ID="${RUN_DATE}_${GIT_HASH}"
+export RUN_DATE GIT_HASH RUN_ID
+export NANOCHAT_RUN_ID="$RUN_ID"
+RUN_DIR="$NANOCHAT_BASE_DIR/runs/$RUN_ID"
+export NANOCHAT_RUN_DIR="$RUN_DIR"
+mkdir -p "$RUN_DIR"
+mkdir -p "$NANOCHAT_BASE_DIR/runs"
+echo "$RUN_ID" > "$NANOCHAT_BASE_DIR/runs/latest"
 
 # -----------------------------------------------------------------------------
 # GPU detection: auto-detect number and type of GPUs
@@ -93,7 +118,9 @@ fi
 echo "---------------------"
 echo "BEGINNING NEW RUN"
 echo "num GPUs: $NUM_GPUS. testrun=$TESTRUN. depth=$DEPTH."
-echo "dir for run checkpoints and eval reports: $NANOCHAT_BASE_DIR"
+echo "base dir: $NANOCHAT_BASE_DIR"
+echo "run dir: $RUN_DIR"
+echo "run id: $RUN_ID"
 echo "---------------------"
 
 # -----------------------------------------------------------------------------
