@@ -29,6 +29,9 @@ from nanochat.checkpoint_manager import save_checkpoint, load_model
 from nanochat.engine import Engine
 from tasks.gsm8k import GSM8K
 
+# NOTE: exp2 currently skips this GSM8K-only RL stage while the d12 letter-counting
+# sweep is in progress. Keeping the script intact for later RL comparisons.
+
 # -----------------------------------------------------------------------------
 # CLI arguments
 parser = argparse.ArgumentParser(description="Reinforcement learning on GSM8K")

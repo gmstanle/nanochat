@@ -22,7 +22,6 @@ from nanochat.engine import Engine
 from tasks.humaneval import HumanEval
 from tasks.mmlu import MMLU
 from tasks.arc import ARC
-from tasks.gsm8k import GSM8K
 from tasks.spellingbee import SpellingBee
 
 # -----------------------------------------------------------------------------
@@ -158,15 +157,18 @@ def run_categorical_eval(task_object, tokenizer, model, batch_size, max_problems
 
 def run_chat_eval(task_name, model, tokenizer, engine,
                    batch_size=1, num_samples=1, max_new_tokens=512, temperature=0.0, top_k=50,
-                   max_problems=None):
+                   max_problems=None, spellingbee_val_size=2000, spellingbee_test_size=2000):
     # Create the evaluation object
     task_module = {
         'HumanEval': HumanEval,
         'MMLU': partial(MMLU, subset="all", split="test"),
         'ARC-Easy': partial(ARC, subset="ARC-Easy", split="test"),
         'ARC-Challenge': partial(ARC, subset="ARC-Challenge", split="test"),
-        'GSM8K': partial(GSM8K, subset="main", split="test"),
-        'SpellingBee': partial(SpellingBee, size=256, split="test"),
+        # Temporarily removing GSM8K eval while exp2 is focused on letter counting / SpellingBee.
+        # 'GSM8K': partial(GSM8K, subset="main", split="test"),
+        'SpellingBee': partial(SpellingBee, size=spellingbee_test_size, split="test"),
+        'SpellingBee-Val': partial(SpellingBee, size=spellingbee_val_size, split="val"),
+        'SpellingBee-Test': partial(SpellingBee, size=spellingbee_test_size, split="test"),
     }[task_name]
     task_object = task_module()
     # Run the evaluation
@@ -183,7 +185,7 @@ if __name__ == "__main__":
 
     # Parse command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('-i', '--source', type=str, required=True, help="Source of the model: sft|rl")
+    parser.add_argument('-i', '--source', type=str, required=True, help="Source of the model: base|sft|rl")
     parser.add_argument('-a', '--task-name', type=str, default=None, help="Task name. Default = all tasks. Use | to split multiple tasks.")
     parser.add_argument('-d', '--dtype', type=str, default='bfloat16', choices=['float32', 'bfloat16'])
     parser.add_argument('-t', '--temperature', type=float, default=0.0)
@@ -194,6 +196,8 @@ if __name__ == "__main__":
     parser.add_argument('-g', '--model-tag', type=str, default=None, help='Model tag to load')
     parser.add_argument('-s', '--step', type=int, default=None, help='Step to load')
     parser.add_argument('-x', '--max-problems', type=int, default=None, help='Max problems to evaluate')
+    parser.add_argument('--spellingbee-val-size', type=int, default=2000, help='Held-out SpellingBee validation set size')
+    parser.add_argument('--spellingbee-test-size', type=int, default=2000, help='Held-out SpellingBee test set size')
     parser.add_argument('--device-type', type=str, default='', choices=['cuda', 'cpu', 'mps'], help='Device type for evaluation: cuda|cpu|mps. empty => autodetect')
     args = parser.parse_args()
 
@@ -206,14 +210,17 @@ if __name__ == "__main__":
     engine = Engine(model, tokenizer)
 
     # Get the tasks to evaluate on
-    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'GSM8K', 'HumanEval', 'SpellingBee']
+    all_tasks = ['ARC-Easy', 'ARC-Challenge', 'MMLU', 'HumanEval', 'SpellingBee-Test']
     baseline_accuracies = {
         'ARC-Easy': 0.25, # multiple choice 1 of 4 => 25%
         'ARC-Challenge': 0.25, # multiple choice 1 of 4 => 25%
         'MMLU': 0.25, # multiple choice 1 of 4 => 25%
-        'GSM8K': 0.0, # open-ended => 0%
+        # Temporarily removing GSM8K eval while exp2 is focused on letter counting / SpellingBee.
+        # 'GSM8K': 0.0, # open-ended => 0%
         'HumanEval': 0.0, # open-ended => 0%
         'SpellingBee': 0.0, # open-ended => 0%
+        'SpellingBee-Val': 0.0, # open-ended => 0%
+        'SpellingBee-Test': 0.0, # open-ended => 0%
     }
     task_names = all_tasks if args.task_name is None else args.task_name.split('|')
 
@@ -230,6 +237,8 @@ if __name__ == "__main__":
                 temperature=args.temperature,
                 top_k=args.top_k,
                 max_problems=args.max_problems,
+                spellingbee_val_size=args.spellingbee_val_size,
+                spellingbee_test_size=args.spellingbee_test_size,
             )
             results[task_name] = acc
             print0(f"{task_name} accuracy: {100 * acc:.2f}%")

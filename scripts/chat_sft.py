@@ -24,7 +24,6 @@ from nanochat.checkpoint_manager import load_model
 import torch.distributed as dist
 
 from tasks.common import TaskMixture
-from tasks.gsm8k import GSM8K
 from tasks.mmlu import MMLU
 from tasks.smoltalk import SmolTalk
 from tasks.customjson import CustomJSON
@@ -40,6 +39,7 @@ parser.add_argument("--device-type", type=str, default="", help="cuda|cpu|mps (e
 parser.add_argument("--dtype", type=str, default="bfloat16", help="float32|bfloat16")
 # Model loading
 parser.add_argument("--model-tag", type=str, default=None, help="model tag to load from")
+parser.add_argument("--base-model-tag", type=str, default=None, help="base model tag to load from (defaults to --model-tag)")
 parser.add_argument("--model-step", type=int, default=None, help="model step to load from")
 # Training horizon
 parser.add_argument("--num-iterations", type=int, default=-1, help="number of optimization steps (-1 = full epoch)")
@@ -47,6 +47,9 @@ parser.add_argument("--num-iterations", type=int, default=-1, help="number of op
 parser.add_argument("--max-seq-len", type=int, default=2048, help="max context length")
 parser.add_argument("--device-batch-size", type=int, default=32, help="per-device batch size")
 parser.add_argument("--total-batch-size", type=int, default=524288, help="total batch size in tokens")
+parser.add_argument("--simple-spelling-size", type=int, default=200000, help="number of SimpleSpelling rows in SFT")
+parser.add_argument("--spellingbee-size", type=int, default=80000, help="number of SpellingBee rows in SFT")
+parser.add_argument("--spellingbee-val-size", type=int, default=2000, help="number of held-out SpellingBee validation rows")
 # Optimization
 parser.add_argument("--embedding-lr", type=float, default=0.3, help="learning rate for embedding parameters (Adam)")
 parser.add_argument("--unembedding-lr", type=float, default=0.004, help="learning rate for unembedding parameters (Adam)")
@@ -76,7 +79,8 @@ use_dummy_wandb = args.run == "dummy" or not master_process
 wandb_run = DummyWandb() if use_dummy_wandb else wandb.init(project="nanochat-sft", name=args.run, config=user_config)
 
 # Load the model and tokenizer
-model, tokenizer, meta = load_model("base", device, phase="train", model_tag=args.model_tag, step=args.model_step)
+base_model_tag = args.base_model_tag if args.base_model_tag is not None else args.model_tag
+model, tokenizer, meta = load_model("base", device, phase="train", model_tag=base_model_tag, step=args.model_step)
 pretrain_batch_size = meta.get("device_batch_size", None)
 if pretrain_batch_size is not None and args.device_batch_size > pretrain_batch_size:
     print0(f"FOOTGUN WARNING: base model training used device_batch_size {pretrain_batch_size}, did you pass in a good --device-batch-size to this script?")
@@ -106,18 +110,21 @@ identity_conversations_filepath = os.path.join(base_dir, "identity_conversations
 train_dataset = TaskMixture([
     SmolTalk(split="train"), # 460K rows of general conversations
     MMLU(subset="auxiliary_train", split="train"), # 100K rows of multiple choice problems drawn from ARC, MC_TEST, OBQA, RACE
-    GSM8K(subset="main", split="train"), # 8K rows teaching simple math and (calculator) tool use
-    GSM8K(subset="main", split="train"), # 2 epochs of GSM8K
+    # Temporarily removing GSM8K from SFT while exp2 is focused on letter counting / SpellingBee.
+    # GSM8K(subset="main", split="train"), # 8K rows teaching simple math and (calculator) tool use
+    # GSM8K(subset="main", split="train"), # 2 epochs of GSM8K
     CustomJSON(filepath=identity_conversations_filepath), # 1000 rows of synthetic identity conversations
     CustomJSON(filepath=identity_conversations_filepath), # let's do 2 epochs of these
-    SimpleSpelling(size=200000, split="train"), # 200K rows of Simple Spelling (e.g. spell the word 'apple')
-    SpellingBee(size=80000, split="train"), # 80K rows of Spelling Bee (e.g. how many 'r' are in 'strawberry'?)
-]) # total: 460K + 100K + 16K + 200K + 80K = 856K rows
+    SimpleSpelling(size=args.simple_spelling_size, split="train"), # spelling support on train-only words
+    SpellingBee(size=args.spellingbee_size, split="train"), # held-out val/test use disjoint word pools
+]) # total: 562K + simple_spelling_size + spellingbee_size rows
 val_dataset = TaskMixture([
     SmolTalk(split="test"), # 24K rows in test set
     MMLU(subset="all", split="test", stop=5200), # 14K rows in test set, use only 5.2K to match the train ratios
-    GSM8K(subset="main", split="test", stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
-]) # total: 24K + 14K + 1.32K ~= 39K rows
+    # Temporarily removing GSM8K from SFT validation while exp2 is focused on letter counting / SpellingBee.
+    # GSM8K(subset="main", split="test", stop=420), # 1.32K rows in test set, use only 420 to match the train ratios
+    SpellingBee(size=args.spellingbee_val_size, split="val"), # 2K held-out letter-counting rows on disjoint words
+]) # total: 24K + 5.2K + spellingbee_val_size rows
 # DataLoader is defined here, it emits inputs, targets : 2D tensors of shape (device_batch_size, max_seq_len)
 # A big problem is that we don't know the final num_iterations in advance. So we create
 # these two global variables and update them from within the data generator.

@@ -1,7 +1,8 @@
 #!/bin/bash
+set -eo pipefail
 
 # This script is configured to train your own GPT-2 grade LLM (pretraining + finetuning)
-# It is designed to run on a blank 8XH100 GPU node and takes approximately 3 hours to complete.
+# It is currently set up for a d12 letter-counting / SpellingBee sweep.
 
 # 1) Example launch (simplest):
 # bash runs/exp2.sh
@@ -14,7 +15,11 @@
 
 # -----------------------------------------------------------------------------
 # User-configurable parameters
-DEPTH=26
+DEPTH=12
+SPELLINGBEE_SIZES=(5000 20000 40000 80000)
+SPELLINGBEE_VAL_SIZE=2000
+SPELLINGBEE_TEST_SIZE=2000
+CHAT_EVAL_TASKS="SpellingBee-Val|SpellingBee-Test"
 
 # -----------------------------------------------------------------------------
 # Shared exp2 config (e.g., NANOCHAT_BASE_DIR_RAW)
@@ -38,7 +43,6 @@ done
 
 if [ "$TESTRUN" = true ]; then
     echo "TESTRUN mode: using depth=12, --num-iterations=100 for base_train and chat_sft, --max-problems=16 for chat_eval"
-    DEPTH=12
     BASE_TRAIN_HORIZON="--num-iterations=100"
     SFT_HORIZON="--num-iterations=100"
     CHAT_EVAL_MAX_PROBLEMS="--max-problems=16"
@@ -91,6 +95,16 @@ fi
 
 echo "Detected $NUM_GPUS GPU(s), using: $LAUNCHER"
 
+log() {
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+run_logged() {
+    local log_file="$1"
+    shift
+    "$@" 2>&1 | tee "$log_file"
+}
+
 # -----------------------------------------------------------------------------
 # Python venv setup with uv
 
@@ -110,7 +124,7 @@ source .venv/bin/activate
 #    `wandb login`
 # 2) Set the WANDB_RUN environment variable when running this script, e.g.:
 #    `WANDB_RUN=d12 bash runs/exp2.sh`
-if [ -z "$WANDB_RUN" ]; then
+if [ -z "${WANDB_RUN:-}" ]; then
     # by default use "dummy" : it's handled as a special case, skips logging to wandb
     WANDB_RUN=dummy
 fi
@@ -122,6 +136,13 @@ echo "base dir: $NANOCHAT_BASE_DIR"
 echo "run dir: $RUN_DIR"
 echo "run id: $RUN_ID"
 echo "---------------------"
+
+RESULTS_DIR="$RUN_DIR/lettercount_sweep"
+mkdir -p "$RESULTS_DIR"
+RESULTS_FILE="$RESULTS_DIR/models.csv"
+if [ ! -f "$RESULTS_FILE" ]; then
+    echo "stage,spellingbee_size,model_tag,log_file" > "$RESULTS_FILE"
+fi
 
 # -----------------------------------------------------------------------------
 # During the course of the run, we will be writing markdown reports to the report/
@@ -160,58 +181,70 @@ echo "---------------------"
 echo "Beginning pretraining"
 echo "---------------------"
 
-BASE_CKPT_DIR="$NANOCHAT_BASE_DIR/base_checkpoints/d$DEPTH"
+BASE_TAG="exp2_${RUN_ID}_d${DEPTH}_base"
+BASE_CKPT_DIR="$NANOCHAT_BASE_DIR/base_checkpoints/$BASE_TAG"
 if ls "$BASE_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
     echo "Base model checkpoint found at $BASE_CKPT_DIR, skipping base_train and base_eval"
 else
-    $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run=$WANDB_RUN
-    
+    BASE_TRAIN_LOG="$RESULTS_DIR/${BASE_TAG}_train.log"
+    run_logged "$BASE_TRAIN_LOG" $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run="${WANDB_RUN}_${BASE_TAG}" --model-tag="$BASE_TAG"
+    echo "base,0,$BASE_TAG,$BASE_TRAIN_LOG" >> "$RESULTS_FILE"
+
     echo "---------------------"
     echo "beginning post-pretrain eval"
     echo "---------------------"
 
     # evaluate the model: CORE metric, BPB on train/val, and draw samples
-    $LAUNCHER -m scripts.base_eval -- --device-batch-size=16
+    BASE_EVAL_LOG="$RESULTS_DIR/${BASE_TAG}_base_eval.log"
+    run_logged "$BASE_EVAL_LOG" $LAUNCHER -m scripts.base_eval -- --device-batch-size=16 --model-tag="$BASE_TAG"
 fi
 
-# -----------------------------------------------------------------------------
-# SFT (teach the model conversation special tokens, tool use, multiple choice)
 echo "---------------------"
-echo "Beginning SFT"
+echo "beginning base chat eval"
+echo "---------------------"
+BASE_CHAT_EVAL_LOG="$RESULTS_DIR/${BASE_TAG}_chat_eval.log"
+run_logged "$BASE_CHAT_EVAL_LOG" $LAUNCHER -m scripts.chat_eval -- -i base -g "$BASE_TAG" -a "$CHAT_EVAL_TASKS" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE" --spellingbee-test-size="$SPELLINGBEE_TEST_SIZE" $CHAT_EVAL_MAX_PROBLEMS
+
+# -----------------------------------------------------------------------------
+# SFT sweep (vary SpellingBee size while keeping the same base checkpoint)
+echo "---------------------"
+echo "Beginning SFT sweep"
 echo "---------------------"
 
 # download 2.3MB of synthetic identity conversations to impart a personality to nanochat
 # see dev/gen_synthetic_data.py for details on how this data was prepared and to get a sense of how you can easily tune it
 curl -L -o $NANOCHAT_BASE_DIR/identity_conversations.jsonl https://karpathy-public.s3.us-west-2.amazonaws.com/identity_conversations.jsonl
 
-SFT_CKPT_DIR="$NANOCHAT_BASE_DIR/chatsft_checkpoints/d$DEPTH"
-if ls "$SFT_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
-    echo "SFT checkpoint found at $SFT_CKPT_DIR, skipping chat_sft and chat_eval"
-else
-    # run SFT and eval the model
-    $LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run=$WANDB_RUN
+for SPELLINGBEE_SIZE in "${SPELLINGBEE_SIZES[@]}"; do
+    SFT_TAG="exp2_${RUN_ID}_d${DEPTH}_sb${SPELLINGBEE_SIZE}"
+    SFT_CKPT_DIR="$NANOCHAT_BASE_DIR/chatsft_checkpoints/$SFT_TAG"
+    if ls "$SFT_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
+        echo "SFT checkpoint found at $SFT_CKPT_DIR, skipping chat_sft"
+    else
+        SFT_TRAIN_LOG="$RESULTS_DIR/${SFT_TAG}_train.log"
+        run_logged "$SFT_TRAIN_LOG" $LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run="${WANDB_RUN}_${SFT_TAG}" --base-model-tag="$BASE_TAG" --model-tag="$SFT_TAG" --spellingbee-size="$SPELLINGBEE_SIZE" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE"
+        echo "sft,$SPELLINGBEE_SIZE,$SFT_TAG,$SFT_TRAIN_LOG" >> "$RESULTS_FILE"
+    fi
 
     echo "---------------------"
-    echo "beginning post-SFT eval"
+    echo "beginning post-SFT eval for $SFT_TAG"
     echo "---------------------"
 
-    $LAUNCHER -m scripts.chat_eval -- -i sft $CHAT_EVAL_MAX_PROBLEMS
-fi
+    SFT_EVAL_LOG="$RESULTS_DIR/${SFT_TAG}_chat_eval.log"
+    run_logged "$SFT_EVAL_LOG" $LAUNCHER -m scripts.chat_eval -- -i sft -g "$SFT_TAG" -a "$CHAT_EVAL_TASKS" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE" --spellingbee-test-size="$SPELLINGBEE_TEST_SIZE" $CHAT_EVAL_MAX_PROBLEMS
+done
 
 # -----------------------------------------------------------------------------
 # RL (reinforcement learning on GSM8K)
-
-echo "---------------------"
-echo "Beginning RL"
-echo "---------------------"
-
-# Note: no --num-iterations available; uses --num-epochs (default 1 = ~466 steps)
-$LAUNCHER -m scripts.chat_rl -- --device-batch-size=8 --run=$WANDB_RUN
-echo "---------------------"
-echo "beginning post-RL eval"
-echo "---------------------"
-
-$LAUNCHER -m scripts.chat_eval -- -i rl $CHAT_EVAL_MAX_PROBLEMS
+# Temporarily commented out while exp2 is focused on the d12 SpellingBee sweep.
+# echo "---------------------"
+# echo "Beginning RL"
+# echo "---------------------"
+# $LAUNCHER -m scripts.chat_rl -- --device-batch-size=8 --run=$WANDB_RUN
+# echo "---------------------"
+# echo "beginning post-RL eval"
+# echo "---------------------"
+# $LAUNCHER -m scripts.chat_eval -- -i rl $CHAT_EVAL_MAX_PROBLEMS
 
 # chat with the model over CLI! Leave out the -p to chat interactively
 # python -m scripts.chat_cli -p "Why is the sky blue?"

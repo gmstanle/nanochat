@@ -4,9 +4,9 @@ Task intended to make nanochat better in spelling and counting, for example:
 "How many r are in strawberry?" -> 3
 
 An interesting part of this task is that we will get the assistant to
-solve the problem using a combination of manual counting and Python.
+solve the problem using a manual character-by-character counting trace.
 This is a good problem solving "instinct" to mix into the model and RL
-may further refine it to trust one over the other. If we were extra fancy
+may further refine it. If we were extra fancy
 (which we could/should be) we'd add small errors here and there to allow
 the model also learn recoveries. We can do this in future versions.
 
@@ -35,8 +35,15 @@ from nanochat.common import download_file_with_lock
 LETTERS = "abcdefghijklmnopqrstuvwxyz"
 # A list of 370K English words of large variety
 WORD_LIST_URL = "https://raw.githubusercontent.com/dwyl/english-words/refs/heads/master/words_alpha.txt"
-# A number bigger than 370K to separate train and test random seeds
-TEST_RANDOM_SEED_OFFSET = 10_000_000
+# Fixed word-level partition so train/val/test are totally disjoint.
+WORD_SPLIT_SEED = 42
+VAL_WORD_COUNT = 10_000
+TEST_WORD_COUNT = 10_000
+SPLIT_RANDOM_SEED_OFFSETS = {
+    "train": 0,
+    "val": 10_000_000,
+    "test": 20_000_000,
+}
 
 # Identical to gsm8k's answer extraction
 ANSWER_RE = re.compile(r"#### (\-?[0-9\.\,]+)")
@@ -112,18 +119,44 @@ USER_MSG_TEMPLATES = [
     "{word}に{letter}が何回出てくる",
 ]
 
-class SpellingBee(Task):
+def load_words():
+    filename = WORD_LIST_URL.split("/")[-1]
+    word_list_path = download_file_with_lock(WORD_LIST_URL, filename)
+    with open(word_list_path, 'r', encoding='utf-8') as f:
+        words = [line.strip() for line in f]
+    return words
+
+def get_words_for_split(split):
+    assert split in ["train", "val", "test"], "SpellingBee split must be train|val|test"
+    words = load_words()
+    rng = random.Random(WORD_SPLIT_SEED)
+    rng.shuffle(words)
+    assert len(words) > VAL_WORD_COUNT + TEST_WORD_COUNT, "Word list is too small for the requested split sizes"
+    train_stop = len(words) - (VAL_WORD_COUNT + TEST_WORD_COUNT)
+    val_stop = len(words) - TEST_WORD_COUNT
+    split_words = {
+        "train": words[:train_stop],
+        "val": words[train_stop:val_stop],
+        "test": words[val_stop:],
+    }[split]
+    assert len(split_words) > 0, f"No words available for split {split}"
+    return split_words
+
+class SpellingTask(Task):
+    """Shared base class for word-disjoint spelling tasks."""
 
     def __init__(self, size=1000, split="train", **kwargs):
         super().__init__(**kwargs)
-        assert split in ["train", "test"], "SpellingBee split must be train|test"
         self.size = size
         self.split = split
-        filename = WORD_LIST_URL.split("/")[-1]
-        word_list_path = download_file_with_lock(WORD_LIST_URL, filename)
-        with open(word_list_path, 'r', encoding='utf-8') as f:
-            words = [line.strip() for line in f]
-        self.words = words
+        self.words = self.prepare_words(get_words_for_split(split))
+
+    def prepare_words(self, words):
+        return words
+
+    def get_rng(self, index):
+        seed = SPLIT_RANDOM_SEED_OFFSETS[self.split] + index
+        return random.Random(seed)
 
     @property
     def eval_type(self):
@@ -132,9 +165,10 @@ class SpellingBee(Task):
     def num_examples(self):
         return self.size
 
+class SpellingBee(SpellingTask):
+
     def get_example(self, index):
-        seed = index if self.split == 'train' else TEST_RANDOM_SEED_OFFSET + index
-        rng = random.Random(seed)
+        rng = self.get_rng(index)
 
         # pick a random word
         word = rng.choice(self.words)
@@ -158,7 +192,7 @@ class SpellingBee(Task):
         if rng.random() < 0.5: # 50% of people don't even use question marks
             user_msg += "?"
 
-        # Now create the ideal assistant response - build as parts (text + tool calls)
+        # Now create the ideal assistant response as text parts only.
         assistant_parts = []
         word_letters = ",".join(list(word))
         manual_text = f"""We are asked to find the number '{letter}' in the word '{word}'. Let me try a manual approach first.
@@ -184,15 +218,8 @@ Then count the occurrences of '{letter}':
 
         manual_text += f"\nThis gives us {running_count}."
         assistant_parts.append({"type": "text", "text": manual_text})
-        # Part 2: Python verification
-        assistant_parts.append({"type": "text", "text": "\n\nLet me double check this using Python:\n\n"})
-        # Part 3: Python tool call
-        python_expr = f"'{word}'.count('{letter}')"
-        assistant_parts.append({"type": "python", "text": python_expr})
-        # Part 4: Python output
-        assistant_parts.append({"type": "python_output", "text": str(count)})
-        # Part 5: Final answer
-        assistant_parts.append({"type": "text", "text": f"\n\nPython gives us {count}.\n\nMy final answer is:\n\n#### {count}"})
+        # Part 2: Final answer
+        assistant_parts.append({"type": "text", "text": f"\n\nMy final answer is:\n\n#### {count}"})
 
         # return the full conversation
         messages = [
@@ -230,32 +257,17 @@ Then count the occurrences of '{letter}':
         return is_correct_float
 
 
-class SimpleSpelling(Task):
+class SimpleSpelling(SpellingTask):
     """Much simpler task designed to get the model to just practice spelling words."""
 
-    def __init__(self, size=1000, split="train", **kwargs):
-        super().__init__(**kwargs)
-        assert split in ["train", "test"], "SpellingBee split must be train|test"
-        self.size = size
-        self.split = split
-        filename = WORD_LIST_URL.split("/")[-1]
-        word_list_path = download_file_with_lock(WORD_LIST_URL, filename)
-        with open(word_list_path, 'r', encoding='utf-8') as f:
-            words = [line.strip() for line in f]
+    def prepare_words(self, words):
         rng = random.Random(42)
+        words = list(words)
         rng.shuffle(words) # use a different word order than the SpellingBee task
-        self.words = words
-
-    @property
-    def eval_type(self):
-        return 'generative'
-
-    def num_examples(self):
-        return self.size
+        return words
 
     def get_example(self, index):
-        seed = index if self.split == 'train' else TEST_RANDOM_SEED_OFFSET + index
-        rng = random.Random(seed)
+        rng = self.get_rng(index)
         # pick a random word
         word = rng.choice(self.words)
         word_letters = ",".join(list(word))

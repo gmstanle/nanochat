@@ -1,5 +1,16 @@
 # Experiment 2: Log
 
+## 2026-03-16
+
+### Plan
+
+- Shift exp2 to a `d12` letter-counting sweep instead of GSM8K.
+- Build a word-disjoint split for both `SpellingBee` and `SimpleSpelling` so held-out validation/test words never appear in SFT train data.
+- Use a fixed `SpellingBee` validation split of `2,000` examples and a fixed held-out test split for eval.
+- Train one shared `d12` base checkpoint, then run SFT sweeps with `SpellingBee` train sizes of `5k`, `20k`, `40k`, and `80k`.
+- Save the base and every SFT variant to distinct checkpoint tags and run eval on each of them.
+- Temporarily comment out GSM8K SFT/eval usage and skip the RL stage while this letter-counting sweep is in progress.
+
 ## 2026-02-06
 
 - Research on past RL results
