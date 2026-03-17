@@ -2,6 +2,8 @@
 
 ## 2026-03-16
 
+Topline goal: tune a `d12` model into the regime where held-out `SpellingBee` accuracy is roughly `10-25%` after SFT, so it becomes a cheap, learnable target for RL experiments.
+
 ### Plan
 
 - Shift exp2 to a `d12` letter-counting sweep instead of GSM8K.
