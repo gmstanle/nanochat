@@ -1,0 +1,67 @@
+name: nanochat-exp2-full
+
+resources:
+  cloud: aws
+  region: us-east-1
+  instance_type: g5.2xlarge
+  use_spot: false
+  disk_size: 500
+
+workdir: .
+
+envs:
+  NANOCHAT_BASE_DIR_RAW: /home/ubuntu/nanochat-exp2/.cache/nanochat
+
+file_mounts:
+  /outputs:
+    source: s3://gmstanle-nanochat
+    mode: MOUNT
+
+run: |
+  set -euo pipefail
+
+  copy_tree() {
+    local src="$1"
+    local dest="$2"
+    if command -v rsync >/dev/null 2>&1; then
+      rsync -a "$src" "$dest"
+    else
+      cp -R "$src" "$dest"
+    fi
+  }
+
+  sync_artifacts() {
+    local run_id latest_id src_base dest_base
+    src_base="/home/ubuntu/nanochat-exp2/.cache/nanochat"
+    latest_id=""
+    if [[ -f "$src_base/runs/latest" ]]; then
+      latest_id="$(cat "$src_base/runs/latest")"
+    fi
+    dest_base="/outputs/skypilot/exp2_full"
+
+    mkdir -p "$dest_base"
+
+    if [[ -d "$src_base/tokenizer" ]]; then
+      copy_tree "$src_base/tokenizer" "$dest_base/"
+    fi
+    if [[ -d "$src_base/report" ]]; then
+      copy_tree "$src_base/report" "$dest_base/"
+    fi
+    if [[ -d "$src_base/base_checkpoints" ]]; then
+      copy_tree "$src_base/base_checkpoints" "$dest_base/"
+    fi
+    if [[ -d "$src_base/chatsft_checkpoints" ]]; then
+      copy_tree "$src_base/chatsft_checkpoints" "$dest_base/"
+    fi
+    if [[ -d "$src_base/runs" ]]; then
+      copy_tree "$src_base/runs" "$dest_base/"
+    fi
+    if [[ -n "$latest_id" && -d "$src_base/runs/$latest_id" ]]; then
+      mkdir -p "$dest_base/latest_run"
+      copy_tree "$src_base/runs/$latest_id/" "$dest_base/latest_run/"
+    fi
+  }
+
+  trap sync_artifacts EXIT
+
+  bash runs/exp2.sh
