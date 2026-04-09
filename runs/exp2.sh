@@ -129,6 +129,15 @@ if [ -z "${WANDB_RUN:-}" ]; then
     WANDB_RUN=dummy
 fi
 
+wandb_run_name() {
+    local tag="$1"
+    if [ "$WANDB_RUN" = "dummy" ]; then
+        printf 'dummy'
+    else
+        printf '%s_%s' "$WANDB_RUN" "$tag"
+    fi
+}
+
 echo "---------------------"
 echo "BEGINNING NEW RUN"
 echo "num GPUs: $NUM_GPUS. testrun=$TESTRUN. depth=$DEPTH."
@@ -187,7 +196,7 @@ if ls "$BASE_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
     echo "Base model checkpoint found at $BASE_CKPT_DIR, skipping base_train and base_eval"
 else
     BASE_TRAIN_LOG="$RESULTS_DIR/${BASE_TAG}_train.log"
-    run_logged "$BASE_TRAIN_LOG" $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run="${WANDB_RUN}_${BASE_TAG}" --model-tag="$BASE_TAG"
+    run_logged "$BASE_TRAIN_LOG" $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run="$(wandb_run_name "$BASE_TAG")" --model-tag="$BASE_TAG"
     echo "base,0,$BASE_TAG,$BASE_TRAIN_LOG" >> "$RESULTS_FILE"
 
     echo "---------------------"
@@ -222,7 +231,7 @@ for SPELLINGBEE_SIZE in "${SPELLINGBEE_SIZES[@]}"; do
         echo "SFT checkpoint found at $SFT_CKPT_DIR, skipping chat_sft"
     else
         SFT_TRAIN_LOG="$RESULTS_DIR/${SFT_TAG}_train.log"
-        run_logged "$SFT_TRAIN_LOG" $LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run="${WANDB_RUN}_${SFT_TAG}" --base-model-tag="$BASE_TAG" --model-tag="$SFT_TAG" --spellingbee-size="$SPELLINGBEE_SIZE" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE"
+        run_logged "$SFT_TRAIN_LOG" $LAUNCHER -m scripts.chat_sft -- $SFT_HORIZON --device-batch-size=16 --run="$(wandb_run_name "$SFT_TAG")" --base-model-tag="$BASE_TAG" --model-tag="$SFT_TAG" --spellingbee-size="$SPELLINGBEE_SIZE" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE"
         echo "sft,$SPELLINGBEE_SIZE,$SFT_TAG,$SFT_TRAIN_LOG" >> "$RESULTS_FILE"
     fi
 

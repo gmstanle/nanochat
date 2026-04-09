@@ -1,5 +1,22 @@
 # Experiment 2: Log
 
+## 2026-04-09
+
+### SkyPilot / AWS note
+
+- SkyPilot is working end to end on AWS for `exp2`; the current full run is on a single `A10G` (`g5.2xlarge`) with wandb disabled.
+
+### Base pretraining estimates
+
+- `1x A10G` on `g5.2xlarge` at about `$1.21/hr`:
+  - steady-state training rate from live logs is about `8.45s/step` and `62k tok/s`
+  - full `base_train` from scratch is about `1,785` steps, so about `4.2h` and about `$5.1` of instance cost
+  - from the current live run at step `75/1785`, remaining `base_train` ETA is about `241m` (`4.0h`) and about `$4.9`
+- `8x A10G` on `g5.48xlarge` at about `$16.29/hr`:
+  - ideal scaling from reducing gradient accumulation from `16` to `2` would be about `1.06s/step`, `496k tok/s`, `31.5m`, and about `$8.6`
+  - more realistic expectation is about `1.2-1.4s/step`, `375k-440k tok/s`, `36-43m`, and about `$9.8-$11.7`
+  - practical takeaway: `8x A10G` is likely about `6-7x` faster for `base_train`, but not cheaper than the `1x A10G` run
+
 ## 2026-03-16
 
 Topline goal: tune a `d12` model into the regime where held-out `SpellingBee` accuracy is roughly `10-25%` after SFT, so it becomes a cheap, learnable target for RL experiments.

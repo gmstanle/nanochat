@@ -11,6 +11,7 @@ workdir: .
 
 envs:
   NANOCHAT_BASE_DIR_RAW: /home/ubuntu/nanochat-exp2/.cache/nanochat
+  WANDB_RUN: dummy
 
 file_mounts:
   /outputs:
