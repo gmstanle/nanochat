@@ -19,7 +19,8 @@ DEPTH=12
 SPELLINGBEE_SIZES=(5000 20000 40000 80000)
 SPELLINGBEE_VAL_SIZE=2000
 SPELLINGBEE_TEST_SIZE=2000
-CHAT_EVAL_TASKS="SpellingBee-Val|SpellingBee-Test"
+CHAT_EVAL_TASKS="SpellingBee-Val"
+CHAT_EVAL_MAX_PROBLEMS="--max-problems=300"
 
 # -----------------------------------------------------------------------------
 # Shared exp2 config (e.g., NANOCHAT_BASE_DIR_RAW)
@@ -49,7 +50,7 @@ if [ "$TESTRUN" = true ]; then
 else
     BASE_TRAIN_HORIZON="--target-param-data-ratio=8.5"
     SFT_HORIZON=""
-    CHAT_EVAL_MAX_PROBLEMS=""
+    CHAT_EVAL_MAX_PROBLEMS="--max-problems=300"
 fi
 
 # Default intermediate artifacts directory is in ~/.cache/nanochat
@@ -196,16 +197,16 @@ if ls "$BASE_CKPT_DIR"/model_*.pt 1>/dev/null 2>&1; then
     echo "Base model checkpoint found at $BASE_CKPT_DIR, skipping base_train and base_eval"
 else
     BASE_TRAIN_LOG="$RESULTS_DIR/${BASE_TAG}_train.log"
-    run_logged "$BASE_TRAIN_LOG" $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 $GPU_FLAGS --run="$(wandb_run_name "$BASE_TAG")" --model-tag="$BASE_TAG"
+    run_logged "$BASE_TRAIN_LOG" $LAUNCHER -m scripts.base_train -- --depth=$DEPTH $BASE_TRAIN_HORIZON --device-batch-size=16 --core-metric-every=-1 $GPU_FLAGS --run="$(wandb_run_name "$BASE_TAG")" --model-tag="$BASE_TAG"
     echo "base,0,$BASE_TAG,$BASE_TRAIN_LOG" >> "$RESULTS_FILE"
 
     echo "---------------------"
     echo "beginning post-pretrain eval"
     echo "---------------------"
 
-    # evaluate the model: CORE metric, BPB on train/val, and draw samples
+    # evaluate the model: BPB on train/val and draw samples (skip CORE; it is too slow)
     BASE_EVAL_LOG="$RESULTS_DIR/${BASE_TAG}_base_eval.log"
-    run_logged "$BASE_EVAL_LOG" $LAUNCHER -m scripts.base_eval -- --device-batch-size=16 --model-tag="$BASE_TAG"
+    run_logged "$BASE_EVAL_LOG" $LAUNCHER -m scripts.base_eval -- --eval bpb,sample --device-batch-size=16 --model-tag="$BASE_TAG"
 fi
 
 echo "---------------------"
