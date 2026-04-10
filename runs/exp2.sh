@@ -18,7 +18,6 @@ set -eo pipefail
 DEPTH=12
 SPELLINGBEE_SIZES=(5000 20000 40000 80000)
 SPELLINGBEE_VAL_SIZE=2000
-SPELLINGBEE_TEST_SIZE=2000
 CHAT_EVAL_TASKS="SpellingBee-Val"
 CHAT_EVAL_MAX_PROBLEMS="--max-problems=300"
 
@@ -213,7 +212,7 @@ echo "---------------------"
 echo "beginning base chat eval"
 echo "---------------------"
 BASE_CHAT_EVAL_LOG="$RESULTS_DIR/${BASE_TAG}_chat_eval.log"
-run_logged "$BASE_CHAT_EVAL_LOG" $LAUNCHER -m scripts.chat_eval -- -i base -g "$BASE_TAG" -a "$CHAT_EVAL_TASKS" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE" --spellingbee-test-size="$SPELLINGBEE_TEST_SIZE" $CHAT_EVAL_MAX_PROBLEMS
+run_logged "$BASE_CHAT_EVAL_LOG" $LAUNCHER -m scripts.chat_eval -- -i base -g "$BASE_TAG" -a "$CHAT_EVAL_TASKS" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE" $CHAT_EVAL_MAX_PROBLEMS
 
 # -----------------------------------------------------------------------------
 # SFT sweep (vary SpellingBee size while keeping the same base checkpoint)
@@ -241,7 +240,7 @@ for SPELLINGBEE_SIZE in "${SPELLINGBEE_SIZES[@]}"; do
     echo "---------------------"
 
     SFT_EVAL_LOG="$RESULTS_DIR/${SFT_TAG}_chat_eval.log"
-    run_logged "$SFT_EVAL_LOG" $LAUNCHER -m scripts.chat_eval -- -i sft -g "$SFT_TAG" -a "$CHAT_EVAL_TASKS" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE" --spellingbee-test-size="$SPELLINGBEE_TEST_SIZE" $CHAT_EVAL_MAX_PROBLEMS
+    run_logged "$SFT_EVAL_LOG" $LAUNCHER -m scripts.chat_eval -- -i sft -g "$SFT_TAG" -a "$CHAT_EVAL_TASKS" --spellingbee-val-size="$SPELLINGBEE_VAL_SIZE" $CHAT_EVAL_MAX_PROBLEMS
 done
 
 # -----------------------------------------------------------------------------
